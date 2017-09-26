@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-
+from tensorflow.examples.tutorials.mnist import input_data
 
 def lrelu(x, leak=0.2, name='lrelu'):
     return tf.maximum(x, leak*x)
@@ -132,6 +132,8 @@ if __name__ == '__main__':
     condloss_weight = 1.0
     advloss_weight = 1.0
     entloss_weight = 10.0
+    mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
+
 
     ''' build encoder input and encoder layers'''
     x = tf.placeholder(tf.float32, [None, 784])
@@ -156,8 +158,7 @@ if __name__ == '__main__':
             train_steps.run(feed_dict={x:batch[0], y:batch[1], keep_prob:0.5})
     '''
 
-    x_g = tf.placeholder(tf.float32, [None, None, None, None])
-    real_fc3 = reconstruct_encoder(x_g, reconstruction_var)[-2]
+    real_fc3 = encoders[-2]
     print('encoder real ???', real_fc3)
 
     ''' generater 1 '''
@@ -169,7 +170,9 @@ if __name__ == '__main__':
     ''' generator 0 '''
     z0 = tf.Variable(tf.random_uniform([batch_size, 50], maxval=1.0))
     gen_x = generator_0(z0, real_fc3, batch_size)
+    gen_x_joint = generator_0(z0, gen_fc3[-1], batch_size)
     print('generator0 for encoder1:', gen_x[-1])
+    print('generator0 for generator1:', gen_x_joint[-1])
 
 
     ''' forward pass '''
@@ -184,7 +187,7 @@ if __name__ == '__main__':
     print('discriminator1 for reconize z 50:', recon_z1)
 
     # discriminator0
-    dis_real0 = discriminator_0(x_g, batch_size)
+    dis_real0 = discriminator_0(x, batch_size)
     prob_real0 = dis_real0[-1]
     print('discriminator0 for input:', prob_real0)
     dis_gen0 = discriminator_0(gen_x[-1], batch_size)
@@ -218,3 +221,22 @@ if __name__ == '__main__':
     loss_gen0_adv = tf.reduce_mean(tf.losses.softmax_cross_entropy(prob_gen0, tf.ones(tf.shape(prob_gen0))))
     loss_gen0_cond = tf.reduce_mean((recon_fc3 - real_fc3)**2)
     loss_gen0 = advloss_weight * loss_gen0_adv + condloss_weight * loss_gen0_cond + entloss_weight * loss_gen0_ent
+
+    ''' training steps '''
+    train_dis1 = opt_encoder(loss_dis1)
+    train_dis0 = opt_encoder(loss_dis0)
+    train_gen1 = opt_encoder(loss_gen1)
+    train_gen0 = opt_encoder(loss_gen0)
+
+    '''
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+        for i in range(20000):
+            batch = mnist.train.next_batch(batch_size)
+            batch_hot = np.zeros((batch_size, 10), dtype=np.float32)
+            sess.run(train_gen1, feed_dict = {x: batch[0], y:batch[1], y_hot:batch_hot})
+            sess.run(train_gen0, feed_dict = {x: batch[0], y:batch[1], y_hot:batch_hot})
+            sess.run(train_dis1, feed_dict = {x: batch[0], y:batch[1], y_hot:batch_hot})
+            sess.run(train_dis0, feed_dict = {x: batch[0], y:batch[1], y_hot:batch_hot})
+    '''
+
