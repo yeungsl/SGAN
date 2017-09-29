@@ -125,10 +125,66 @@ def generator_0(z0, fc3, batch_size):
                 [batch_size, 4, 4, 128]
              )
         )
-    generator_0.append(tf.contrib.layers.batch_norm(tf.nn.relu(tf.nn.conv2d_transpose(generator_0[-1], tf.Variable(tf.random_normal([5,5,128,128])), [batch_size,8,8,128], [1,2,2,1]))))
-    generator_0.append(tf.contrib.layers.batch_norm(tf.nn.relu(tf.nn.conv2d_transpose(generator_0[-1], tf.Variable(tf.random_normal([5,5,64,128])), [batch_size, 12,12,64], [1,1,1,1]))))
-    generator_0.append(tf.contrib.layers.batch_norm(tf.nn.relu(tf.nn.conv2d_transpose(generator_0[-1], tf.Variable(tf.random_normal([5,5,64,64])), [batch_size, 24,24,64], [1,2,2,1]))))
-    generator_0.append(tf.nn.sigmoid(tf.nn.conv2d_transpose(generator_0[-1], [5,5,1,64], tf.Variable(tf.random_normal([batch_size, 28, 28, 1])), [1,1,1,1])))
+
+
+    generator_0.append(
+        tf.pad(
+            tf.contrib.layers.batch_norm(
+                tf.nn.relu(
+                    tf.nn.bias_add(
+                        tf.nn.conv2d_transpose(generator_0[-1],
+                                               tf.Variable(tf.random_normal([5,5,128,128])),
+                                               [batch_size,8,8,128],
+                                               [1,2,2,1]),
+                        tf.Variable(tf.constant(0.0, shape=[128]))
+                    )
+                )
+            ),
+            [[0,0], [2,2], [2,2], [0,0]],
+            "CONSTANT"
+        )
+    )
+    generator_0.append(
+        tf.contrib.layers.batch_norm(
+            tf.nn.relu(
+                tf.nn.bias_add(
+                    tf.nn.conv2d_transpose(generator_0[-1],
+                                           tf.Variable(tf.random_normal([5,5,64,128])),
+                                           [batch_size,12,12,64],
+                                           [1,1,1,1]),
+                    tf.Variable(tf.constant(0.0, shape=[64]))
+                )
+            )
+        )
+    )
+    generator_0.append(
+        tf.pad(
+            tf.contrib.layers.batch_norm(
+                tf.nn.relu(
+                    tf.nn.bias_add(
+                        tf.nn.conv2d_transpose(generator_0[-1],
+                                               tf.Variable(tf.random_normal([5,5,64,64])),
+                                               [batch_size,24,24,64],
+                                               [1,2,2,1]),
+                        tf.Variable(tf.constant(0.0, shape=[64]))
+                    )
+                )
+            ),
+            [[0,0], [2,2], [2,2], [0,0]],
+            "CONSTANT"
+        )
+    )
+    generator_0.append(
+        tf.nn.sigmoid(
+            tf.nn.bias_add(
+                tf.nn.conv2d_transpose(generator_0[-1],
+                                       tf.Variable(tf.random_normal([5,5,1,64])),
+                                       [batch_size,28,28,1],
+                                       [1,1,1,1]),
+                tf.Variable(tf.constant(0.0, shape=[1]))
+            )
+        )
+    )
 
     return generator_0
 
@@ -162,6 +218,7 @@ if __name__ == '__main__':
     ''' input variables '''
     batch_size = 100
     learning_rate = 0.0001
+    Epoch = 1000
     # from paper
     condloss_weight = 1.0
     advloss_weight = 1.0
@@ -185,12 +242,13 @@ if __name__ == '__main__':
     train_steps = opt_encoder(cross_entropy, learning_rate)  # Feed Cross Entropy to Optimizor, and now it is ready for training :)
     accuracy = acc_encoder(encoders[-1],y)    # Calculate Accuracy
 
+    saver = tf.train.Saver(reconstruction_var)
     ''' train the encoders'''
-    '''
+
     # ==== training Encoder first ! === #
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
-        for i in range(20000): # training Step = 20000 No Epoch ...
+        for i in range(Epoch): # training Step = 20000 No Epoch ...
             batch = mnist.train.next_batch(50)
 
             # ---  For optimizor --- #
@@ -199,8 +257,9 @@ if __name__ == '__main__':
             # ---  For Train Accuracy --- #
             if i % 100 == 0:
                 train_accuracy = accuracy.eval(feed_dict={x:batch[0], y:batch[1], keep_prob:1.0})
-                print('step %d, training accuracy %g' %(i, train_accuracy))
-    '''
+                print('step %d, training accuracy %f' %(i, train_accuracy))
+        print("Done training, save the last two layer....")
+        saver.save(sess, 'encoders', global_step=i)
 
     real_fc3 = encoders[-3] # <- extract output of Fully_Connected_1 with shape=[batch, 256]
     print('encoder real ???', real_fc3)
@@ -256,7 +315,9 @@ if __name__ == '__main__':
     loss_dis0 = advloss_weight * (0.5*loss_real0 + 0.5*loss_fake0) + entloss_weight * loss_gen0_ent
 
     # generator1
-    recon_y = tf.matmul(gen_fc3[-1], reconstruction_var[2]) + reconstruction_var[3]
+    enc_w = tf.placeholder(tf.float32, [256, 10])
+    enc_b = tf.placeholder(tf.float32, [10])
+    recon_y = tf.matmul(gen_fc3[-1], enc_w) + enc_b
     loss_gen1_adv = tf.reduce_mean(tf.losses.softmax_cross_entropy(prob_gen1, tf.ones(tf.shape(prob_gen1))))
     loss_gen1_cond = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=recon_y, logits=y_hot))
     loss_gen1 = advloss_weight * loss_gen1_adv + condloss_weight * loss_gen1_cond + entloss_weight * loss_gen1_ent
