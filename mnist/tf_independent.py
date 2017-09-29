@@ -344,19 +344,28 @@ if __name__ == '__main__':
                 imgs = stacked_gen[-1].eval(feed_dict={y_hot:refy_1hot})
                 imgs = np.reshape(imgs[:100,], (100, 28, 28))
                 imgs = [imgs[i, :, :] for i in range (100)]
-                rows = []
-                for i in range(10):
-                    rows.append(np.concatenate(imgs[i::10], 1))
-                imgs = np.concatenate(rows, 0)
+                rows_gen = []
+                for k in range(10):
+                    rows_gen.append(np.concatenate(imgs[k::10], 1))
+                imgs = np.concatenate(rows_gen, 0)
                 scipy.misc.imsave(out_dir+"/mnist_sample_epoch{}.png".format(i), imgs)
 
                 ## generate original image ##
                 orix = np.reshape(batch[0][:100, ], (100, 28, 28))
                 orix = [orix[i, :, :] for i in range(100)]
-                rows = []
-                for i in range(10):
-                    rows.append(np.concatenate(orix[i::10], 1))
-                orix = np.concatenate(rows, 0)
+                rows_ori = []
+                for k in range(10):
+                    rows_ori.append(np.concatenate(orix[k::10], 1))
+                orix = np.concatenate(rows_ori, 0)
                 scipy.misc.imsave(out_dir+"/mnist_ori_epoch{}.png".format(i), imgs)
 
                 ## reconstruct image from encoders ##
+
+                reconx = gen_x[-1].eval(feed_dict={x:batch[0]})
+                reconx = np.reshape(reconx[:100], (100, 28, 28))
+                reconx = [reconx[i, :, :] for i in range(100)]
+                rows_r = []
+                for k in range(10):
+                    rows_r.append(np.concatenate(reconx[k::10], 1))
+                reconx = np.concatenate(rows_r, 0)
+                scipy.misc.imsave(out_dir+"/mnist_recon_epoch{}.png".format(i), imgs)
