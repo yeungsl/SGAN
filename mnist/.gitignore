@@ -5,3 +5,4 @@ checkpoint
 *.meta
 output_img
 pretrained
+.DS_Store

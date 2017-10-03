@@ -3,6 +3,7 @@ import numpy as np
 from tensorflow.examples.tutorials.mnist import input_data
 import scipy, os
 import scipy.misc
+from numpy import linalg as la
 
 def lrelu(x, leak=0.2, name='lrelu'):
     return tf.maximum(x, leak*x)
@@ -57,7 +58,7 @@ def dnn(x, Train=True): # Encoder
         l_fc1_drop = tf.nn.dropout(encoders[-1], keep_prob)
         encoders.append(l_fc1_drop)
 
-        ''' Map the features to 10 attribute (output layer)'''
+        ''' Map the features to 10 attprint(refy_1hot.shape)ribute (output layer)'''
         W_fc2 = tf.Variable(tf.truncated_normal([256, 10], stddev=0.1))
         b_fc2 = tf.Variable(tf.constant(0.1, shape=[10]))
 
@@ -103,7 +104,7 @@ def generator_1(y_hot, batch_size, Train=True):
     # y_hot
     with tf.variable_scope('generator_1') as scope:
         if Train is False:
-            scope.reuse_variable()
+            scope.reuse_variables()
 
         z1 = tf.Variable(tf.random_uniform([batch_size, 50], maxval=1.0))
         generator_1 = [z1]
@@ -123,7 +124,7 @@ def generator_0(fc3, batch_size, Train=True):
     #   Option2: Encoder's Output with encoder[-3], with output shae = [batch_size, 256]
     with tf.variable_scope('generator_0') as scope:
         if Train is False:
-            scope.reuse_variable()
+            scope.reuse_variables()
         z0 = tf.Variable(tf.random_uniform([batch_size, 50], maxval=1.0))
         generator_0 = [z0]
         generator_0.append(tf.contrib.layers.batch_norm(tf.contrib.layers.fully_connected(generator_0[-1], 128)))
@@ -131,6 +132,7 @@ def generator_0(fc3, batch_size, Train=True):
         gen0_z_embed = generator_0[-1]
         # generator_1's (or Encoder's) output into generator
         generator_0.append(tf.reshape(fc3, [batch_size, 256]))
+
         # generator_1's output + noise_Z0
         generator_0.append(tf.concat([generator_0[-1], gen0_z_embed], 1))
 
@@ -196,7 +198,7 @@ if __name__ == '__main__':
     ''' input variables '''
     batch_size = 100
     learning_rate = 0.0001
-    Epoch = 1000
+    Epoch = 10000
     out_dir = os.getcwd()+"/output_img"
     # from paper
     condloss_weight = 1.0
@@ -234,7 +236,7 @@ if __name__ == '__main__':
             train_steps.run(feed_dict={x:batch[0], y:batch[1], keep_prob:0.5})
 
             # ---  For Train Accuracy --- #
-            if i % 100 == 0:
+            if i % 1000 == 0:
                 train_accuracy = accuracy.eval(feed_dict={x:batch[0], y:batch[1], keep_prob:1.0})
                 print('step %d, training accuracy %f' %(i, train_accuracy))
 
@@ -250,9 +252,9 @@ if __name__ == '__main__':
 
     ''' generator 0 '''
     gen_x, z0 = generator_0(real_fc3, batch_size)
-    #gen_x_joint = generator_0(gen_fc3[-1], batch_size)
+    gen_x_joint, z0 = generator_0(gen_fc3[-1], batch_size, Train=False)
     print('generator0 for encoder1:', gen_x[-1])
-    #print('generator0 for generator1:', gen_x_joint[-1])
+    print('generator0 for generator1:', gen_x_joint[-1])
 
 
     ''' forward pass '''
@@ -312,6 +314,8 @@ if __name__ == '__main__':
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
+
+
         for i in range(Epoch):
             batch = mnist.train.next_batch(batch_size)
             batch_hot = np.zeros((batch_size, 10), dtype=np.float32)
@@ -323,7 +327,7 @@ if __name__ == '__main__':
             sess.run(train_dis1, feed_dict = {x: batch[0], y_hot:batch_hot})
             sess.run(train_dis0, feed_dict = {x: batch[0]})
 
-            if i % 100 == 0:
+            if i % 1000 == 0:
                 gen0_l = loss_gen0.eval(feed_dict={x:batch[0]})
                 gen1_l = loss_gen1.eval(feed_dict={y_hot:batch_hot})
                 dis1_l = loss_dis1.eval(feed_dict={x:batch[0], y_hot:batch_hot})
@@ -334,38 +338,47 @@ if __name__ == '__main__':
                 ## reconstruct image from stached generator ##
 
                 refy = np.zeros((batch_size), dtype=np.int)
-                for i in range(batch_size):
-                    refy[i] = i%10
+                for l in range(batch_size):
+                    refy[l] = l%10
                 refy_1hot = np.zeros((batch_size, 10), dtype=np.float32)
                 refy_1hot[np.arange(batch_size), refy] = 1
 
-                recon_gen1, _ = generator_1(y_hot, batch_size, Train=False)
-                stacked_gen = generator_0(recon_gen1[-1], batch_size, Train=False)
-                imgs = stacked_gen[-1].eval(feed_dict={y_hot:refy_1hot})
+                imgs = sess.run(gen_x_joint[-1],feed_dict={y_hot:refy_1hot})
+
                 imgs = np.reshape(imgs[:100,], (100, 28, 28))
+                '''
                 imgs = [imgs[i, :, :] for i in range (100)]
                 rows_gen = []
                 for k in range(10):
                     rows_gen.append(np.concatenate(imgs[k::10], 1))
                 imgs = np.concatenate(rows_gen, 0)
                 scipy.misc.imsave(out_dir+"/mnist_sample_epoch{}.png".format(i), imgs)
-
+                '''
                 ## generate original image ##
                 orix = np.reshape(batch[0][:100, ], (100, 28, 28))
+                L1_norm_samp_ori = la.norm(imgs - orix, 1)
+                L2_norm_samp_ori = la.norm(imgs - orix)
+                '''
                 orix = [orix[i, :, :] for i in range(100)]
                 rows_ori = []
                 for k in range(10):
                     rows_ori.append(np.concatenate(orix[k::10], 1))
                 orix = np.concatenate(rows_ori, 0)
                 scipy.misc.imsave(out_dir+"/mnist_ori_epoch{}.png".format(i), imgs)
-
+                '''
                 ## reconstruct image from encoders ##
 
-                reconx = gen_x[-1].eval(feed_dict={x:batch[0]})
+                reconx = sess.run(gen_x[-1], feed_dict={x:batch[0]})
                 reconx = np.reshape(reconx[:100], (100, 28, 28))
+                L1_norm_r_ori = la.norm(reconx - orix, 1)
+                L2_norm_r_ori = la.norm(reconx - orix)
+                '''
                 reconx = [reconx[i, :, :] for i in range(100)]
                 rows_r = []
                 for k in range(10):
                     rows_r.append(np.concatenate(reconx[k::10], 1))
                 reconx = np.concatenate(rows_r, 0)
                 scipy.misc.imsave(out_dir+"/mnist_recon_epoch{}.png".format(i), imgs)
+                '''
+
+                print("Step %d, L1_sample_ori: %f, L2_sample_ori: %f, L1_recon_ori: %f, L2_recon_ori: %f"%(i, L1_norm_samp_ori, L2_norm_samp_ori, L1_norm_r_ori, L2_norm_r_ori))
