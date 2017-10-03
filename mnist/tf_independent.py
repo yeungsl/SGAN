@@ -1,7 +1,8 @@
 import tensorflow as tf
 import numpy as np
 from tensorflow.examples.tutorials.mnist import input_data
-import scipy, os
+import os
+import scipy
 import scipy.misc
 from numpy import linalg as la
 
@@ -22,8 +23,8 @@ def dnn(x, Train=True): # Encoder
 
         ''' convolution layer 1'''
 
-        W_conv1 = tf.Variable(tf.truncated_normal([5,5,1,32], stddev=0.1)) # define filters
-        b_conv1 = tf.Variable(tf.constant(0.1, shape=[32]))
+        W_conv1 = tf.get_variable("W_conv1", initializer=tf.truncated_normal([5,5,1,32])) # define filters
+        b_conv1 = tf.get_variable("b_conv1", shape=[32], initializer=tf.constant_initializer(0.1))
         l_conv1 = tf.nn.relu(tf.nn.conv2d(encoders[-1], W_conv1, strides=[1,1,1,1], padding='SAME') + b_conv1)
         encoders.append(l_conv1)
 
@@ -34,8 +35,8 @@ def dnn(x, Train=True): # Encoder
 
         ''' convolution layer 2'''
 
-        W_conv2 = tf.Variable(tf.truncated_normal([5,5,32,64], stddev=0.1))
-        b_conv2 = tf.Variable(tf.constant(0.1, shape=[64]))
+        W_conv2 = tf.get_variable("W_conv2", initializer=tf.truncated_normal([5,5,32,64]))
+        b_conv2 = tf.get_variable("b_conv2", shape=[64], initializer=tf.constant_initializer(0.1))
         l_conv2 = tf.nn.relu(tf.nn.conv2d(encoders[-1], W_conv2, strides=[1,1,1,1], padding='SAME') + b_conv2)
         encoders.append(l_conv2)
 
@@ -45,8 +46,8 @@ def dnn(x, Train=True): # Encoder
         encoders.append(l_pool2)
 
         ''' fully connected layer'''
-        W_fc1 = tf.Variable(tf.truncated_normal([7 * 7 * 64, 256], stddev=0.1))
-        b_fc1 = tf.Variable(tf.constant(0.1, shape=[256]))
+        W_fc1 = tf.get_variable("W_fc1", initializer=tf.truncated_normal([7*7*64, 256]))
+        b_fc1 = tf.get_variable("b_fc1", shape=[256], initializer=tf.constant_initializer(0.1))
 
         l_pool2_flat = tf.reshape(encoders[-1], [-1, 7 * 7 * 64])
         encoders.append(l_pool2_flat)
@@ -59,34 +60,26 @@ def dnn(x, Train=True): # Encoder
         encoders.append(l_fc1_drop)
 
         ''' Map the features to 10 attprint(refy_1hot.shape)ribute (output layer)'''
-        W_fc2 = tf.Variable(tf.truncated_normal([256, 10], stddev=0.1))
-        b_fc2 = tf.Variable(tf.constant(0.1, shape=[10]))
+        W_fc2 = tf.get_variable("W_fc2", initializer=tf.truncated_normal([256, 10]))
+        b_fc2 = tf.get_variable("b_fc2", shape=[10], initializer=tf.constant_initializer(0.1))
 
         l_fc2 = tf.matmul(encoders[-1], W_fc2) + b_fc2
         encoders.append(l_fc2)
 
         if Train is False:
-            return encoders, keep_prob, [W_fc1, b_fc1, W_fc2, b_fc2]
+            return encoders, keep_prob, [W_fc2, b_fc2]
         else:
             return encoders, keep_prob
-
-def reconstruct_encoder(x, reconstruction_var):
-    # x: 4-tensor image input
-    # reconstruction_var: [W_fc1, b_fc1, W_fc2, b_fc2]
-    new_enc = [tf.reshape(x, [-1, 7*7*64])]
-    new_enc.append(tf.nn.relu(tf.matmul(new_enc[-1], reconstruction_var[0]) + reconstruction_var[1]))
-    new_enc.append(tf.matmul(new_enc[-1], reconstruction_var[2]) + reconstruction_var[3])
-    return new_enc
 
 def loss_encoder(encoders, y):
     # y --- input label
     return tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=encoders[-1]))
 
-def opt_encoder(loss_func, lr):
+def opt_encoder(loss_func, lr, n):
     # adam optimizor
     # loss_func: using learning_rate = 1e-4
     # TODO: Learning Rate for training
-    return tf.train.AdamOptimizer(lr).minimize(loss_func)
+    return tf.train.AdamOptimizer(learning_rate=lr, name=n).minimize(loss_func)
 
 def acc_encoder(y_conv, y):
     # y_conv: encoder output
@@ -106,7 +99,7 @@ def generator_1(y_hot, batch_size, Train=True):
         if Train is False:
             scope.reuse_variables()
 
-        z1 = tf.Variable(tf.random_uniform([batch_size, 50], maxval=1.0))
+        z1 = tf.get_variable('z1', [batch_size, 50], initializer=tf.random_uniform_initializer(maxval=1.0))
         generator_1 = [z1]
         l_input = tf.reshape(y_hot, [batch_size, 10]) # the same with -1 in encoder batch_size
         generator_1.append(l_input)
@@ -125,7 +118,7 @@ def generator_0(fc3, batch_size, Train=True):
     with tf.variable_scope('generator_0') as scope:
         if Train is False:
             scope.reuse_variables()
-        z0 = tf.Variable(tf.random_uniform([batch_size, 50], maxval=1.0))
+        z0 = tf.get_variable('z0', [batch_size, 50], initializer=tf.random_uniform_initializer(maxval=1.0))
         generator_0 = [z0]
         generator_0.append(tf.contrib.layers.batch_norm(tf.contrib.layers.fully_connected(generator_0[-1], 128)))
         # embed noise Z into generator
@@ -139,32 +132,32 @@ def generator_0(fc3, batch_size, Train=True):
         generator_0.append(tf.reshape(tf.contrib.layers.batch_norm(tf.contrib.layers.fully_connected(generator_0[-1], 128*4*4)),[batch_size, 4, 4, 128]))
 
         generator_0.append(tf.pad(tf.contrib.layers.batch_norm(tf.nn.relu(tf.nn.bias_add(tf.nn.conv2d_transpose(generator_0[-1],
-                                                                                                                tf.Variable(tf.random_normal([5,5,128,128])),
+                                                                                                                tf.get_variable('gen0_conv2d0_W', [5,5,128,128], initializer=tf.random_normal_initializer(stddev=0.02)),
                                                                                                                 [batch_size,8,8,128],
                                                                                                                 [1,2,2,1]),
-                                                                                         tf.Variable(tf.constant(0.0, shape=[128]))))),
+                                                                                         tf.get_variable('gen0_conv2d0_b', [128], initializer=tf.constant_initializer(0.0))))),
                                   [[0,0], [2,2], [2,2], [0,0]],
                                   "CONSTANT"))
 
         generator_0.append(tf.contrib.layers.batch_norm(tf.nn.relu(tf.nn.bias_add(tf.nn.conv2d_transpose(generator_0[-1],
-                                                                                                         tf.Variable(tf.random_normal([5,5,64,128])),
+                                                                                                         tf.get_variable('gen0_conv2d1_W', [5,5,64,128], initializer=tf.random_normal_initializer(stddev=0.02)),
                                                                                                          [batch_size,12,12,64],
                                                                                                          [1,1,1,1]),
-                                                                                  tf.Variable(tf.constant(0.0, shape=[64]))))))
+                                                                                  tf.get_variable('gen0_conv2d1_b', [64], initializer=tf.constant_initializer(0.0))))))
 
         generator_0.append(tf.pad(tf.contrib.layers.batch_norm(tf.nn.relu(tf.nn.bias_add(tf.nn.conv2d_transpose(generator_0[-1],
-                                                                                                                tf.Variable(tf.random_normal([5,5,64,64])),
+                                                                                                                tf.get_variable('gen0_conv2d2_W', [5,5,64,64], initializer=tf.random_normal_initializer(stddev=0.02)),
                                                                                                                 [batch_size,24,24,64],
                                                                                                                 [1,2,2,1]),
-                                                                                         tf.Variable(tf.constant(0.0, shape=[64]))))),
+                                                                                         tf.get_variable('gen0_conv2d2_b', [64], initializer=tf.constant_initializer(0.0))))),
                                   [[0,0], [2,2], [2,2], [0,0]],
                                   "CONSTANT"))
 
         generator_0.append(tf.nn.sigmoid(tf.nn.bias_add(tf.nn.conv2d_transpose(generator_0[-1],
-                                                                               tf.Variable(tf.random_normal([5,5,1,64])),
+                                                                               tf.get_variable('gen0_conv2d3_W', [5,5,1,64], initializer=tf.random_normal_initializer(stddev=0.02)),
                                                                                [batch_size,28,28,1],
                                                                                [1,1,1,1]),
-                                                        tf.Variable(tf.constant(0.0, shape=[1])))))
+                                                        tf.get_variable('gen0_conv2d3_b', [1], initializer=tf.constant_initializer(0.0)))))
 
         return generator_0, z0
 
@@ -221,10 +214,11 @@ if __name__ == '__main__':
 
     ''' training steps for encoders'''
     cross_entropy = loss_encoder(pre_trained_encoders, y) # Calculate Cross_Entropy
-    train_steps = opt_encoder(cross_entropy, learning_rate)  # Feed Cross Entropy to Optimizor, and now it is ready for training :)
+    train_steps = opt_encoder(cross_entropy, learning_rate, 'encoder_only')  # Feed Cross Entropy to Optimizor, and now it is ready for training :)
     accuracy = acc_encoder(pre_trained_encoders[-1],y)    # Calculate Accuracy
 
     ''' train the encoders'''
+
 
     # ==== training Encoder first ! === #
     with tf.Session() as sess:
@@ -252,7 +246,7 @@ if __name__ == '__main__':
 
     ''' generator 0 '''
     gen_x, z0 = generator_0(real_fc3, batch_size)
-    gen_x_joint, z0 = generator_0(gen_fc3[-1], batch_size, Train=False)
+    gen_x_joint, _ = generator_0(gen_fc3[-1], batch_size, Train=False)
     print('generator0 for encoder1:', gen_x[-1])
     print('generator0 for generator1:', gen_x_joint[-1])
 
@@ -294,7 +288,7 @@ if __name__ == '__main__':
     loss_dis0 = advloss_weight * (0.5*loss_real0 + 0.5*loss_fake0) + entloss_weight * loss_gen0_ent
 
     # generator1
-    recon_y = tf.matmul(gen_fc3[-1], reconstruction_var[2]) + reconstruction_var[3]
+    recon_y = tf.matmul(gen_fc3[-1], reconstruction_var[0]) + reconstruction_var[1]
     loss_gen1_adv = tf.reduce_mean(tf.losses.softmax_cross_entropy(prob_gen1, tf.ones(tf.shape(prob_gen1))))
     loss_gen1_cond = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=recon_y, logits=y_hot))
     loss_gen1 = advloss_weight * loss_gen1_adv + condloss_weight * loss_gen1_cond + entloss_weight * loss_gen1_ent
@@ -306,10 +300,10 @@ if __name__ == '__main__':
     loss_gen0 = advloss_weight * loss_gen0_adv + condloss_weight * loss_gen0_cond + entloss_weight * loss_gen0_ent
 
     ''' training steps '''
-    train_dis1 = opt_encoder(loss_dis1, learning_rate)
-    train_dis0 = opt_encoder(loss_dis0, learning_rate)
-    train_gen1 = opt_encoder(loss_gen1, learning_rate)
-    train_gen0 = opt_encoder(loss_gen0, learning_rate)
+    train_dis1 = opt_encoder(loss_dis1, learning_rate, 'dis_1')
+    train_dis0 = opt_encoder(loss_dis0, learning_rate, 'dis_0')
+    train_gen1 = opt_encoder(loss_gen1, learning_rate, 'gen_1')
+    train_gen0 = opt_encoder(loss_gen0, learning_rate, 'gen_0')
 
 
     with tf.Session() as sess:
@@ -356,7 +350,7 @@ if __name__ == '__main__':
                 '''
                 ## generate original image ##
                 orix = np.reshape(batch[0][:100, ], (100, 28, 28))
-                L1_norm_samp_ori = la.norm(imgs - orix, 1)
+                L1_norm_samp_ori = np.mean(imgs - orix)
                 L2_norm_samp_ori = la.norm(imgs - orix)
                 '''
                 orix = [orix[i, :, :] for i in range(100)]
@@ -370,7 +364,7 @@ if __name__ == '__main__':
 
                 reconx = sess.run(gen_x[-1], feed_dict={x:batch[0]})
                 reconx = np.reshape(reconx[:100], (100, 28, 28))
-                L1_norm_r_ori = la.norm(reconx - orix, 1)
+                L1_norm_r_ori = np.mean(reconx - orix)
                 L2_norm_r_ori = la.norm(reconx - orix)
                 '''
                 reconx = [reconx[i, :, :] for i in range(100)]
@@ -382,3 +376,4 @@ if __name__ == '__main__':
                 '''
 
                 print("Step %d, L1_sample_ori: %f, L2_sample_ori: %f, L1_recon_ori: %f, L2_recon_ori: %f"%(i, L1_norm_samp_ori, L2_norm_samp_ori, L1_norm_r_ori, L2_norm_r_ori))
+
