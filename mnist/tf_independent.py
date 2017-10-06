@@ -23,7 +23,7 @@ def dnn(x, Train=True): # Encoder
 
         ''' convolution layer 1'''
 
-        W_conv1 = tf.get_variable("W_conv1", initializer=tf.truncated_normal([5,5,1,32])) # define filters
+        W_conv1 = tf.get_variable("W_conv1", shape=[5,5,1,32], initializer=tf.contrib.layers.xavier_initializer()) # define filters
         b_conv1 = tf.get_variable("b_conv1", shape=[32], initializer=tf.constant_initializer(0.1))
         l_conv1 = tf.nn.relu(tf.nn.conv2d(encoders[-1], W_conv1, strides=[1,1,1,1], padding='SAME') + b_conv1)
         encoders.append(l_conv1)
@@ -35,7 +35,7 @@ def dnn(x, Train=True): # Encoder
 
         ''' convolution layer 2'''
 
-        W_conv2 = tf.get_variable("W_conv2", initializer=tf.truncated_normal([5,5,32,64]))
+        W_conv2 = tf.get_variable("W_conv2", shape=[5,5,32,64], initializer=tf.contrib.layers.xavier_initializer())
         b_conv2 = tf.get_variable("b_conv2", shape=[64], initializer=tf.constant_initializer(0.1))
         l_conv2 = tf.nn.relu(tf.nn.conv2d(encoders[-1], W_conv2, strides=[1,1,1,1], padding='SAME') + b_conv2)
         encoders.append(l_conv2)
@@ -46,7 +46,7 @@ def dnn(x, Train=True): # Encoder
         encoders.append(l_pool2)
 
         ''' fully connected layer'''
-        W_fc1 = tf.get_variable("W_fc1", initializer=tf.truncated_normal([7*7*64, 256]))
+        W_fc1 = tf.get_variable("W_fc1", shape=[7*7*64, 256], initializer=tf.contrib.layers.xavier_initializer())
         b_fc1 = tf.get_variable("b_fc1", shape=[256], initializer=tf.constant_initializer(0.1))
 
         l_pool2_flat = tf.reshape(encoders[-1], [-1, 7 * 7 * 64])
@@ -60,7 +60,7 @@ def dnn(x, Train=True): # Encoder
         encoders.append(l_fc1_drop)
 
         ''' Map the features to 10 attprint(refy_1hot.shape)ribute (output layer)'''
-        W_fc2 = tf.get_variable("W_fc2", initializer=tf.truncated_normal([256, 10]))
+        W_fc2 = tf.get_variable("W_fc2", shape=[256, 10], initializer=tf.contrib.layers.xavier_initializer())
         b_fc2 = tf.get_variable("b_fc2", shape=[10], initializer=tf.constant_initializer(0.1))
 
         l_fc2 = tf.matmul(encoders[-1], W_fc2) + b_fc2
@@ -101,7 +101,7 @@ def generator_1(y_hot, batch_size, Train=True):
 
         z1 = tf.get_variable('z1', [batch_size, 50], initializer=tf.random_uniform_initializer(maxval=1.0))
         generator_1 = [z1]
-        l_input = tf.reshape(y_hot, [batch_size, 10]) # the same with -1 in encoder batch_size
+        l_input = tf.reshape(y_hot, [batch_size, 10]) # the same with -1 in enc                L1_norm_samp_ori = la.norm(imgs - orix, 1)oder batch_size
         generator_1.append(l_input)
         generator_1.append(tf.concat([z1, l_input], 1)) # along row as 1 ---> output shape = batch_size * 60
         generator_1.append(tf.contrib.layers.batch_norm(tf.contrib.layers.fully_connected(generator_1[-1], 512)))
@@ -190,7 +190,7 @@ if __name__ == '__main__':
 
     ''' input variables '''
     batch_size = 100
-    learning_rate = 0.0001
+    learning_rate = 0.000001
     Epoch = 10000
     out_dir = os.getcwd()+"/output_img"
     # from paper
@@ -300,10 +300,10 @@ if __name__ == '__main__':
     loss_gen0 = advloss_weight * loss_gen0_adv + condloss_weight * loss_gen0_cond + entloss_weight * loss_gen0_ent
 
     ''' training steps '''
-    train_dis1 = opt_encoder(loss_dis1, learning_rate, 'dis_1')
-    train_dis0 = opt_encoder(loss_dis0, learning_rate, 'dis_0')
-    train_gen1 = opt_encoder(loss_gen1, learning_rate, 'gen_1')
-    train_gen0 = opt_encoder(loss_gen0, learning_rate, 'gen_0')
+    train_dis1 = opt_encoder(loss_dis1, learning_rate, 'pro_encoder')
+    train_dis0 = opt_encoder(loss_dis0, learning_rate, 'pro_encoder')
+    train_gen1 = opt_encoder(loss_gen1, learning_rate, 'pro_encoder')
+    train_gen0 = opt_encoder(loss_gen0, learning_rate, 'pro_encoder')
 
 
     with tf.Session() as sess:
@@ -376,4 +376,5 @@ if __name__ == '__main__':
                 '''
 
                 print("Step %d, L1_sample_ori: %f, L2_sample_ori: %f, L1_recon_ori: %f, L2_recon_ori: %f"%(i, L1_norm_samp_ori, L2_norm_samp_ori, L1_norm_r_ori, L2_norm_r_ori))
+
 
