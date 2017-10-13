@@ -3,6 +3,7 @@ checkpoint
 *.data*
 *.index
 *.meta
+*_data
 output_img
 pretrained
 .DS_Store
